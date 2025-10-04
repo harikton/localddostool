@@ -39,7 +39,9 @@ if not defined gateway (
 )
 
 echo.
-ping -n 1 !gateway! >nul 2>&1
+if defined gateway (
+    ping -n 1 !gateway! >nul 2>&1
+)
 
 :show_ipconfig
 echo Определение через ipconfig:
@@ -73,32 +75,33 @@ echo.
 set /a countRequest=0
 set text=?
 
+:input_loop
 echo Список сгенерирован. Введите кол-во запросов которое хотите отправить: 
-set /p main="DdosChivarly> "
-set /a countRequest=%main% 2>nul
+set /p "main=DdosChivarly> "
+set /a countRequest=!main! 2>nul
 
-if %countRequest% leq 0 (
+if !countRequest! leq 0 (
     echo Введите верное число
-    pause
-    exit
+    goto :input_loop
 )
 
 echo Введите текст:
-set /p mainT="DdosChivarly> "
+set /p "mainT=DdosChivarly> "
 
-if "%mainT%"=="" (
+if "!mainT!"=="" (
     set "text=?"
 ) else (
-    set "text=%mainT%"
+    set "text=!mainT!"
 )
 
 echo.
-echo Будет отправлено запросов: %countRequest%
-echo С текстом: %text%
+echo Будет отправлено запросов: !countRequest!
+echo С текстом: !text!
 echo Список избегания: !ipNumber! IP-адресов
 echo.
 pause
 
+cls
 echo [Запуск отправки запросов...]
 echo.
 ping -n 2 localhost >nul
@@ -109,14 +112,14 @@ set /a new_avoided=0
 rem Создаем временный файл для проверки ошибок
 set "temp_file=%temp%\ddos_check.tmp"
 
-for /l %%i in (1,1,%countRequest%) do (
+for /l %%i in (1,1,!countRequest!) do (
     echo.
-    echo [Пакет номер: %%i/%countRequest%]
+    echo [Пакет номер: %%i/!countRequest!]
     
     set farip=0
     for /l %%j in (1,1,256) do (
         set /a farip+=1
-        set requestip=192.168.0.!farip!
+        set "requestip=192.168.0.!farip!"
         
         set skip_ip=0
         rem Проверяем, не совпадает ли IP с нашими адресами
@@ -127,7 +130,7 @@ for /l %%i in (1,1,%countRequest%) do (
         )
         
         if !skip_ip!==0 (
-            echo [ОТПРАВКА] Запрос к !requestip! с текстом: %text%
+            echo [ОТПРАВКА] Запрос к !requestip! с текстом: !text!
             
             rem Отправляем запрос и проверяем на ошибку 1722
             msg !requestip! "!text!" 2>!temp_file!
@@ -153,6 +156,7 @@ for /l %%i in (1,1,%countRequest%) do (
 )
 
 rem Сохраняем обновленный список избегания в файл
+echo.
 echo Сохраняем список избегания...
 > "!avoid_list_file!" (
     for /l %%i in (1,1,!ipNumber!) do (
@@ -166,8 +170,8 @@ if exist "!temp_file!" del "!temp_file!"
 echo.
 echo ========================================
 echo [СТАТИСТИКА]
-echo Всего пакетов отправлено: %countRequest%
-echo Всего IP обработано: %total_sent%
+echo Всего пакетов отправлено: !countRequest!
+echo Всего IP обработано: !total_sent!
 echo IP адресов в избегании: !ipNumber!
 echo Новых добавлено в избегание: !new_avoided!
 echo Файл списка: !avoid_list_file!
